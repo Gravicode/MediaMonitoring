@@ -5,6 +5,10 @@ namespace MediaMonitoringWeb.Helpers
 {
     public static class StringExtension
     {
+        public static string RemoveNumbers(this string input)
+        {
+            return Regex.Replace(input, @"[\d-]", string.Empty);
+        }
         public static string StripPunctuation(this string s)
         {
             var sb = new StringBuilder();
