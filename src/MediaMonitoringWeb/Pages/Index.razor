@@ -1,0 +1,172 @@
+﻿@page "/"
+@using System.Text
+@inject SastrawiHelper sastrawi
+@inject NltkHelper nltk
+@inject IJSRuntime JS
+
+<PageTitle>Media Monitoring</PageTitle>
+
+<h3>Media Monitoring</h3>
+
+<div class="mb-2">
+  <div class="form-group">
+    <label for="keyword">Keyword</label>
+    <input type="text" @bind="keyword" class="form-control" id="exampleInputEmail1" aria-describedby="keywordhelp" placeholder="Enter keyword">
+    <small id="keywordhelp" class="form-text text-muted">type your search keyword here.</small>
+  </div>
+  <button type="button" @onclick="GoSearch" class="btn btn-primary">Go</button>
+  <button type="button" @onclick="Process" class="btn btn-primary">Proses Text Mining</button>
+</div>
+
+
+@if (tweets != null)
+{
+    <table class="table table-bordered table-hover" id="grid">
+        <thead>
+        <tr>
+            <th>No</th>
+            <th>Tweets</th>
+        </tr>
+    </thead>    
+    <tbody>
+        @{
+            var counter = 1;
+        }
+        @foreach(var item in tweets){
+        <tr>
+            <td>
+                @(counter++)
+            </td>
+            <td>
+                @item
+            </td>
+        </tr>
+        }
+    </tbody>
+    </table>
+}
+<hr />
+@if (tweetsClean != null)
+{
+    <h3>Setelah Stemming dan Hapus Stop Word</h3>
+    <table class="table table-bordered table-hover" id="grid2">
+        <thead>
+        <tr>
+            <th>No</th>
+            <th>Tweets</th>
+        </tr>
+    </thead>    
+    <tbody>
+        @{
+            var counter = 1;
+        }
+        @foreach(var item in tweetsClean){
+        <tr>
+            <td>
+                @(counter++)
+            </td>
+            <td>
+                @item
+            </td>
+        </tr>
+        }
+    </tbody>
+    </table>
+}
+<hr />
+@if (Words != null)
+{
+    <h3>Hitung Kata</h3>
+    <table class="table table-bordered table-hover" id="grid3">
+        <thead>
+        <tr>
+            <th>Kata</th>
+            <th>Jumlah</th>
+        </tr>
+    </thead>    
+    <tbody>
+        
+        @foreach(var item in Words){
+        <tr>
+            <td>
+                @item.Key
+            </td>
+            <td>
+                @item.Value
+            </td>
+        </tr>
+        }
+    </tbody>
+    </table>
+}
+@if (!string.IsNullOrEmpty(WordCloudImg))
+{
+    <img src="@WordCloudImg" alt="cloud" />
+}
+
+@code{
+    List<string> tweets;
+    List<string> tweetsClean;
+    TwitterHelper TwitterLib;
+    string WordCloudImg;
+    Dictionary<string,int> Words;
+    string keyword = "#jokowi";
+    protected override async Task OnInitializedAsync()
+    {
+        TwitterLib = new TwitterHelper(AppConstants.CONSUMER_KEY,AppConstants.CONSUMER_SECRET,AppConstants.ACCESS_TOKEN,AppConstants.ACCESS_TOKEN_SECRET);
+    }
+
+    async Task GoSearch()
+    {
+        tweets = await TwitterLib.Search(keyword);
+    }
+    async Task Process()
+    {
+        if (tweetsClean == null) tweetsClean = new List<string>();
+        if(tweets!=null && tweets.Count > 0)
+        {
+            var allWords = new StringBuilder();
+            tweetsClean.Clear();
+            foreach(var kalimat in tweets)
+            {
+                //hapus tanda baca dan remove url
+                var cleanedWord = kalimat.RemoveLink().StripPunctuation().CleanTwitterString();
+                //hapus stop word
+                cleanedWord  = sastrawi.RemoveStopWords(cleanedWord);
+                //stemming kata
+                cleanedWord = sastrawi.Stemming(cleanedWord);
+                tweetsClean.Add(cleanedWord);
+                allWords.Append(" " + cleanedWord.Trim());
+            }
+            //word count
+            var WordFreq = nltk.CountingWords(allWords.ToString());
+            if(Words==null) Words = new Dictionary<string, int>();
+            Words.Clear();
+            for(int i = 0; i < WordFreq.words.Count; i++)
+            {
+                Words.Add( WordFreq.words[i] , WordFreq.Frequencies[i]);
+            }
+            //create word cloud
+            WordCloudImg = WordCloudHelper.GetWordCloudBase64(WordFreq.words, WordFreq.Frequencies);
+        }
+        else
+        {
+            
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        //if (firstRender)
+        {
+            if(tweets!=null)
+                await JS.InvokeVoidAsync("SetDataTable","grid"); 
+            if(tweetsClean!=null)
+                await JS.InvokeVoidAsync("SetDataTable","grid2"); 
+            if(Words!=null)
+                await JS.InvokeVoidAsync("SetDataTable","grid3");
+           
+
+        }
+    }
+}
+
